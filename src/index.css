@@ -40,18 +40,18 @@
 }
 
 input {
-    background-color: transparent;
-    position: absolute;
-      bottom: 5px;
-      left: 12px;
+    background-color: transparent; 
     border: none;
     font-weight: bold;
     color: snow;
     font-size: 14px;
     outline: none;
+    outline-style: none;
+    
 }
 input:hover {
     border: none;
+    background-color: transparent;
 }
 
 input::placeholder {
