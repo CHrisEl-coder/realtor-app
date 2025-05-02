@@ -4,6 +4,8 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { Link } from "react-router-dom";
+import { MdMapsHomeWork } from "react-icons/md";
 
 export default function Profile() {
   const auth = getAuth();
@@ -105,6 +107,15 @@ export default function Profile() {
               </p>
             </div>
           </form>
+          <button className=" w-full mt-4">
+            <Link
+              to="/create-listing"
+              className="flex items-center justify-center gap-2 mt-4 bg-white  border border-slate-300 rounded-md p-3 shadow-md hover:shadow-lg active:scale-95 transition-all duration-200 ease-in-out"
+            >
+              <MdMapsHomeWork className=" text-amber-600 hover:text-amber-800 transition-colors duration-200 ease-in-out text-2xl" />
+              <p className=" font-semibold"> Sell or Rent your homes</p>
+            </Link>
+          </button>
         </div>
       </section>
     </>
