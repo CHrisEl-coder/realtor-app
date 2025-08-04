@@ -1,11 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getAuth, updateProfile } from "firebase/auth";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router";
-import { doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { db } from "../firebase";
 import { Link } from "react-router-dom";
 import { MdMapsHomeWork } from "react-icons/md";
+import ListingTab from "../components/ListingTab";
+import Loader from "../components/Loader";
 
 export default function Profile() {
   const auth = getAuth();
@@ -14,12 +24,17 @@ export default function Profile() {
 
   const [changeDetails, setChangeDetails] = useState(false);
 
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [listings, setlistings] = useState(null);
+
   const [user, setUser] = useState({
     name: auth.currentUser.displayName,
     email: auth.currentUser.email,
+    userId: auth.currentUser.uid,
   });
 
-  const { name, email } = user;
+  const { name, email, userId } = user;
 
   const LogOut = () => {
     auth.signOut();
@@ -57,6 +72,43 @@ export default function Profile() {
       toast.error("Could not update profile details");
     }
   };
+
+  useEffect(() => {
+    const listinguserData = async () => {
+      const collectionRef = collection(db, "listings");
+      const q = query(
+        collectionRef,
+        where("userRef", "==", userId),
+        orderBy("timeStamp", "desc")
+      );
+
+      const querSnapshot = await getDocs(q);
+
+      let listing = [];
+
+      querSnapshot.forEach((doc) => {
+        listing.push({
+          id: doc.id,
+          data: doc.data(),
+        });
+      });
+
+      setlistings(listing);
+      setIsLoading(false);
+    };
+
+    listinguserData();
+  }, [userId]);
+
+  const handleDeleteSuccess = (id) => {
+    setlistings((prevData) => {
+      return prevData.filter((listing) => listing.id !== id);
+    });
+  };
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   return (
     <>
@@ -118,6 +170,23 @@ export default function Profile() {
           </button>
         </div>
       </section>
+
+      {!isLoading && (
+        <div className="max-w-6xl mx-auto py-4 px-4 space-y-4 flex flex-col justify-center items-center">
+          <h1 className="font-bold font-sans text-lg">My Listings</h1>
+          <div className="w-full grid grid-cols-[repeat(auto-fit,_minmax(300px,_1fr))] place-items-center gap-4 px-3">
+            {listings.map((listing) => (
+              <ListingTab
+                listing={listing.data}
+                key={listing.id}
+                id={listing.id}
+                onDelete={handleDeleteSuccess}
+                userId={userId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

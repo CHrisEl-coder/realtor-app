@@ -1,6 +1,18 @@
 import React, { useState } from "react";
+import Loader from "../components/Loader";
+import { Geolocation, storeImage } from "../utils";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router";
+
+import { getAuth } from "firebase/auth";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase";
 
 const CreateListing = () => {
+  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
   const [listingData, setListingData] = useState({
     type: "rent",
     name: "",
@@ -11,8 +23,10 @@ const CreateListing = () => {
     address: "",
     description: "",
     offer: true,
-    reggularPrice: 0,
-    discountedPrice: 0,
+    regularPrice: "",
+    discountedPrice: "",
+    latitude: "",
+    longitude: "",
     images: {},
   });
 
@@ -28,14 +42,137 @@ const CreateListing = () => {
     offer,
     regularPrice,
     discountedPrice,
+    latitude,
+    longitude,
     images,
   } = listingData;
 
-  const handleClick = () => {};
+  const handleClick = (e) => {
+    const { id, value, type: inputType } = e.target;
+    if (
+      inputType === "button" &&
+      ["parking", "furnished", "offer"].includes(id)
+    ) {
+      setListingData((prevData) => ({
+        ...prevData,
+        [id]: value === "true",
+      }));
+    } else if (inputType === "button" && ["sale", "rent"].includes(id)) {
+      setListingData((prevData) => ({
+        ...prevData,
+        type: value,
+      }));
+    } else if (inputType === "file") {
+      const files = e.target.files;
+
+      setListingData((prevData) => ({
+        ...prevData,
+        images: files,
+      }));
+    } else {
+      setListingData((prevData) => ({
+        ...prevData,
+        [id]: inputType === "number" ? parseInt(value) : value,
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    let geometry = {};
+
+    e.preventDefault();
+
+    setIsLoading(true);
+
+    // check if discounted price is lower than regular price
+    if (discountedPrice && discountedPrice >= regularPrice) {
+      setIsLoading(false);
+      toast.error("Discount price must be lower than the regular price.");
+      return;
+    }
+
+    // first of all we would check whether the address is valid or not
+
+    if (!address) {
+      setIsLoading(false);
+      toast.error("Pleas enter a valid address");
+      return;
+    }
+
+    try {
+      const coords = await Geolocation(address);
+
+      if (!coords) {
+        setIsLoading(false);
+        toast.error(
+          "Failed to fetch location coordinates, Please input a valid address."
+        );
+        return;
+      }
+
+      geometry = {
+        ltd: coords.latitude,
+        lng: coords.longitude,
+      };
+
+      const auth = getAuth();
+      const userId = auth.currentUser.uid;
+
+      if (!images || images.length === 0) {
+        setIsLoading(false);
+        toast.error("Please upload at least one image.");
+        return;
+      }
+
+      const imageUrls = await Promise.allSettled(
+        [...images].map((image) => storeImage(image, userId))
+      );
+
+      const imageUrlsSuccess = imageUrls
+        .filter((res) => res.status === "fulfilled")
+        .map((res) => res.value);
+
+      if (imageUrlsSuccess.length === 0) {
+        setIsLoading(false);
+        toast.error("Images upload failed, please try again.");
+        return;
+      }
+
+      const submitData = {
+        ...listingData,
+        geometry,
+        imageUrls: imageUrlsSuccess,
+        userRef: userId,
+        timeStamp: serverTimestamp(),
+      };
+
+      delete submitData.images;
+      !offer && delete submitData.discountedPrice;
+      delete submitData.latitude;
+      delete submitData.longitude;
+
+      const docRef = await addDoc(collection(db, "listings"), submitData);
+
+      toast.success("Listing created successfully");
+      navigate(`/category/${submitData.type}/${docRef.id}`);
+    } catch (error) {
+      console.error(
+        "Error creating listing: ",
+        error?.response?.data?.message || error.message || error
+      );
+      toast.error("Failed to create listing, Pleas try again");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   return (
     <main className=" max-w-md px-2 mx-auto">
-      <form>
+      <form onSubmit={handleSubmit}>
         <h1 className=" text-3xl text-center mt-6 font-bold">Create Listing</h1>
 
         <p className=" font-semibold text-lg mb-1">Sell / Rent</p>
@@ -44,10 +181,11 @@ const CreateListing = () => {
             type="button"
             id="sale"
             value="sale"
-            className={` w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg hover:bg-white focus:bg-white focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
-              type === "sale"
-                ? "text-white bg-amber-900"
-                : " text-black bg-white"
+            onClick={handleClick}
+            className={` w-full px-2 py-3 border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
+              type === "rent"
+                ? "text-black bg-white"
+                : " text-white bg-amber-900 shadow-md"
             }`}
           >
             Sell
@@ -58,10 +196,10 @@ const CreateListing = () => {
             id="rent"
             value="rent"
             onClick={handleClick}
-            className={` w-full px-2 py-3 rounded border border-slate-300 uppercase font-medium shadow-md hover:shadow-lg focus:border-slate-600 transition duration-300 ease-in-out ${
-              type === "rent"
-                ? " bg-amber-900 text-white"
-                : "bg-white text-black"
+            className={` w-full px-2 py-3 rounded border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out ${
+              type === "sale"
+                ? "bg-white text-black"
+                : "bg-amber-900 text-white shadow-md"
             }`}
           >
             Rent
@@ -75,34 +213,37 @@ const CreateListing = () => {
           value={name}
           placeholder="Name"
           onChange={handleClick}
-          className=" w-full px-2 py-3 border border-slate-300 rounded text-gray-700  placeholder:text-gray-600 outline-none focus:bg-white mb-6"
+          required
+          minLength={8}
+          maxLength={50}
+          className=" w-full px-2 py-3 border border-slate-300 rounded text-gray-700  placeholder:text-gray-600 outline-none focus:bg-white focus:shadow-md mb-6"
         />
 
         <div className="flex gap-4 mb-6">
-          <div className=" flex flex-col gap-1">
-            <p className=" text-lg font-semibold">Bed</p>
+          <div className="w-full flex flex-col gap-1">
+            <p className="text-lg font-semibold">Bed</p>
             <input
               type="number"
-              id="bed"
+              id="bedroom"
               value={bedroom}
-              max={50}
+              max={10}
               min={1}
               required
               onChange={handleClick}
-              className=" w-full px-7 py-3 shadow-md bg-white border border-slate-300 rounded outline-none hover:bg-white focus:bg-white transition duration-300 ease-out "
+              className="w-full px-7 py-3 bg-white border border-slate-300 rounded outline-none transition duration-150 ease-in-out focus:ring-0 focus:border-slate-300 focus:shadow-md "
             />
           </div>
-          <div className=" flex flex-col gap-1">
+          <div className="w-full flex flex-col gap-1">
             <p className=" font-semibold text-lg">Bath</p>
             <input
               type="number"
-              id="bath"
+              id="bathroom"
               value={bathroom}
-              max={50}
+              max={10}
               min={1}
               required
               onChange={handleClick}
-              className=" w-full px-7 py-3 shadow-md bg-white border border-slate-300 rounded outline-none hover:bg-white focus:bg-white transition duration-300 ease-out "
+              className=" w-full px-7 py-3 bg-white border border-slate-300 rounded outline-none hover:bg-white focus:bg-white focus:border-slate-300 focus:shadow-md focus:ring-0 transition duration-150 ease-out "
             />
           </div>
         </div>
@@ -114,8 +255,11 @@ const CreateListing = () => {
               type="button"
               id="parking"
               value={true}
-              className={` w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
-                !parking ? " text-black bg-white" : "text-white bg-amber-900"
+              onClick={handleClick}
+              className={` w-full px-2 py-3 border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
+                !parking
+                  ? "text-black bg-white"
+                  : "text-white bg-amber-900 shadow-md "
               }`}
             >
               Yes
@@ -124,9 +268,12 @@ const CreateListing = () => {
             <button
               type="button"
               id="parking"
+              onClick={handleClick}
               value={false}
-              className={` w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
-                parking ? "text-black bg-white" : "text-white bg-amber-900"
+              className={` w-full px-2 py-3 border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
+                parking
+                  ? "text-black bg-white"
+                  : "text-white bg-amber-900 shadow-md"
               }`}
             >
               No
@@ -140,8 +287,11 @@ const CreateListing = () => {
               type="button"
               id="furnished"
               value={true}
-              className={` w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
-                !furnished ? " text-black bg-white" : "text-white bg-amber-900"
+              onClick={handleClick}
+              className={` w-full px-2 py-3 border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
+                !furnished
+                  ? " text-black bg-white"
+                  : "text-white bg-amber-900 shadow-md"
               }`}
             >
               Yes
@@ -150,8 +300,11 @@ const CreateListing = () => {
               type="button"
               id="furnished"
               value={false}
-              className={` w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
-                furnished ? " text-black bg-white" : "text-white bg-amber-900"
+              onClick={handleClick}
+              className={` w-full px-2 py-3 border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
+                furnished
+                  ? " text-black bg-white"
+                  : "text-white bg-amber-900 shadow-md"
               }`}
             >
               No
@@ -165,8 +318,35 @@ const CreateListing = () => {
             id="address"
             value={address}
             onChange={handleClick}
-            className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:border-slate-600 outline-none text-xl transition duration-300 ease-in-out"
+            className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:shadow-md outline-none text-xl transition duration-150 ease-in-out"
           />
+        </div>
+        <div className={`mb-6 flex gap-4 ${locationEnabled ? "hidden" : ""}`}>
+          <div className="w-full">
+            <p className="font-semibold text-lg mb-1"> Latitude </p>
+            <input
+              type="number"
+              id="latitude"
+              min={-80}
+              max={80}
+              value={latitude}
+              onChange={handleClick}
+              className="w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:border-slate-300 focus:ring-0 focus:outline-none focus:shadow-md outline-none text-xl transition duration-150 ease-in-out"
+            />
+          </div>
+
+          <div className="w-full">
+            <p className="font-semibold text-lg mb-1"> Longitude </p>
+            <input
+              type="number"
+              id="longitude"
+              min={-180}
+              max={180}
+              value={longitude}
+              onChange={handleClick}
+              className="w-full border border-slate-300 px-4 py-2 rounded outline-none text-xl transition duration-300 ease-in-out focus:bg-white focus:border-slate-300 focus:ring-0 focus:outline-none focus:shadow-md"
+            />
+          </div>
         </div>
         <div className="mb-6">
           <p className=" text-lg font-semibold mb-1"> Description </p>
@@ -175,7 +355,7 @@ const CreateListing = () => {
             id="description"
             value={description}
             onChange={handleClick}
-            className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:border-slate-600 outline-none text-xl transition duration-300 ease-in-out"
+            className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:shadow-md outline-none text-xl transition duration-150 ease-in-out"
           />
         </div>
 
@@ -186,7 +366,8 @@ const CreateListing = () => {
               type="button"
               id="offer"
               value={true}
-              className={`w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
+              onClick={handleClick}
+              className={`w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
                 offer === true
                   ? "text-white bg-amber-900"
                   : " text-black bg-white"
@@ -198,7 +379,8 @@ const CreateListing = () => {
               id="offer"
               type="button"
               value={false}
-              className={`w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:text-gray-700 focus:border-slate-600 transition duration-300 ease-in-out rounded ${
+              onClick={handleClick}
+              className={`w-full px-2 py-3 shadow-md border border-slate-300 uppercase font-medium hover:shadow-lg focus:border-slate-600 transition duration-150 ease-in-out rounded ${
                 offer === false
                   ? "text-white bg-amber-900"
                   : " text-black bg-white"
@@ -218,7 +400,7 @@ const CreateListing = () => {
                 id="regularPrice"
                 value={regularPrice}
                 onChange={handleClick}
-                className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:border-slate-600 outline-none text-xl transition duration-300 ease-in-out text-gray-700"
+                className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:shadow-md outline-none text-xl transition duration-150 ease-in-out text-gray-700"
                 min={50}
                 max={40000}
                 required
@@ -240,7 +422,7 @@ const CreateListing = () => {
                   id="discountedPrice"
                   value={discountedPrice}
                   onChange={handleClick}
-                  className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:border-slate-600 outline-none text-xl transition duration-300 ease-in-out text-gray-700"
+                  className=" w-full border border-slate-300 px-4 py-2 rounded focus:bg-white focus:shadow-md outline-none text-xl transition duration-300 ease-in-out text-gray-700"
                   min={50}
                   max={40000}
                   required={offer}
