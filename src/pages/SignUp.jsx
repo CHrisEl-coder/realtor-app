@@ -75,7 +75,7 @@ export default function SignIn() {
                 id="first"
                 placeholder="First-Name"
                 value={first}
-                className="w-full "
+                className="w-full auth-input"
                 onChange={onChange}
               />
               <CiUser className="icon" />
@@ -86,7 +86,7 @@ export default function SignIn() {
                 id="last"
                 placeholder="Last-Name"
                 value={last}
-                className="w-full"
+                className="w-full auth-input"
                 onChange={onChange}
               />
               <CiUser className="icon" />
@@ -97,7 +97,7 @@ export default function SignIn() {
                 id="email"
                 placeholder="Enter Your Email"
                 value={email}
-                className="w-full"
+                className="w-full auth-input"
                 onChange={onChange}
               />
               <BsEnvelopeAt className="icon" />
@@ -107,7 +107,7 @@ export default function SignIn() {
                 type={showPassword ? "text" : "password"}
                 id="password"
                 placeholder="Password"
-                className="w-full"
+                className="w-full auth-input"
                 value={password}
                 onChange={onChange}
               />

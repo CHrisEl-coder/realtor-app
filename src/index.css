@@ -39,7 +39,7 @@
     margin-top: 6rem;
 }
 
-input {
+.auth-input {
     background-color: transparent; 
     border: none;
     font-weight: bold;
@@ -49,15 +49,25 @@ input {
     outline-style: none;
     
 }
-input:hover {
+.auth-input:hover {
     border: none;
     background-color: transparent;
 }
 
-input::placeholder {
+.auth-input::placeholder {
     color: snow;
     background-color: transparent;
     opacity: .7;
+}
+
+.auth-input:focus {
+    background-color: transparent;
+    color: snow;
+}
+
+.auth-input:active {
+    background-color: transparent;
+    color: snow;
 }
 
 .mail, .pass, .user, .last {
@@ -76,3 +86,8 @@ input::placeholder {
     font-size: 18px;
     
 }
+
+.swiper {
+    height: 300px;
+}
+

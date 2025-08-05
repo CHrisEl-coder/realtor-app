@@ -39,7 +39,7 @@ export default function SignIn() {
                 id="email"
                 placeholder="Enter Your Email"
                 value={email}
-                className="w-full"
+                className="w-full auth-input"
                 onChange={onChange}
               />
               <BsEnvelopeAt className="icon" />
