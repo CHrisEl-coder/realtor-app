@@ -9,6 +9,7 @@ import {
 } from "react-icons/md";
 import { formatCurrency } from "../utils";
 import Moment from "react-moment";
+import { Link } from "react-router-dom";
 
 const RecentListing = () => {
   const [listings, setListings] = useState([]);
@@ -44,8 +45,11 @@ const RecentListing = () => {
       <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 mx-auto place-items-center gap-4 px-4 py-2">
         {listings.length > 0 &&
           listings.map((l, index) => (
-            <article className=" relative w-full md:max-w-[300px] shadow-md rounded-md flex flex-col ">
-              <figure className="relative h-48 overflow-hidden rounded-t-md">
+            <Link
+              to={`/category/${l.type}/${l.id}`}
+              className=" relative w-full md:max-w-[300px] shadow-md rounded-md flex flex-col overflow-hidden"
+            >
+              <figure className="relative h-48 overflow-hidden rounded-t-md hover:scale-105 transition-transform duration-150 ease-in-out">
                 <img
                   src={l.imageUrls[0]}
                   alt={`listingImage${index}`}
@@ -97,7 +101,7 @@ const RecentListing = () => {
                   {l.timeStamp.toDate()}
                 </Moment>
               </p>
-            </article>
+            </Link>
           ))}
       </div>
     </section>
